@@ -1,83 +1,129 @@
-# HugeMonitorHelper (BorderDock)
+# HugeMonitorHelper
 
-A personal Windows utility for working across many projects on one very large
-screen. Each window you care about gets a thick colored border, a title chip, and
-a matching taskbar button, so seven near-identical Claude Code terminals stop
-looking like seven near-identical Claude Code terminals.
+**Tell your windows apart on a very large monitor.**
 
-Click a border to summon that window to a center slot; the one that was centered
-folds back to where you'd placed it.
+![platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078D4)
+![.NET](https://img.shields.io/badge/.NET-8.0--windows-512BD4)
+![license](https://img.shields.io/badge/license-MIT-green)
+
+On a 40" 4K panel you can keep a dozen windows open at once. The problem isn't
+space — it's identity. Seven terminal windows running seven different projects
+look *identical*, in the taskbar and on screen. You end up reading titles to work
+out which one is which, over and over, all day.
+
+HugeMonitorHelper gives each window you care about a **thick colored border**, a
+**name tag**, and a **matching taskbar button**, so you recognise it by color
+instead of by reading. Click a border to pull that window to the center of the
+screen at a comfortable size; the one that was there folds back to where you'd
+put it.
+
+It was built for juggling many **Claude Code / AI coding sessions** at once, but
+nothing about it is AI-specific — it works on any window.
+
+---
+
+## What you get
+
+| | |
+|---|---|
+| 🎨 **Colored border + name chip** | Around each managed window. Sits directly above *that* window in the z-order, not globally on top, so anything covering the window covers its border too. |
+| 🔖 **Taskbar identity** | A color swatch icon with the project's initials, plus the name prefixed onto the button label. A collapsed window is still identifiable. |
+| 🎯 **Center slot** | Click a border or chip to summon a window to center. Exactly one window is centered at a time; the previous one folds home automatically. |
+| 💾 **Survives restarts** | Rules persist. When a matching window reappears it gets re-bordered and moved back to its saved position. |
+| 🔔 **Attention strobe** | A terminal whose output goes quiet after being busy — your AI session finished and is waiting on you — strobes its border until you look at it. |
+| 🚀 **Launch project** | Opens a session in its own console at a saved project path, from the tray. |
+| ✋ **Hand gestures** *(optional)* | Point to move focus, open palm to center, fist to fold home, swipe to cycle. Webcam + Python sidecar. |
+
+Right-click any name chip for per-window settings: label, color, font size, keep
+on top, taskbar tagging, or remove.
+
+## Install
+
+Needs Windows 10/11 and the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 
 ```powershell
-cd BorderDock.Spike
+git clone https://github.com/Davidkulpe/HugeMonitorHelper.git
+cd HugeMonitorHelper/BorderDock.Spike
 dotnet run -c Debug
 ```
 
-Closing the window hides to tray. **Quit** from the tray menu really exits — and
-is the only path that saves window positions and hands back the titles and icons
-it borrowed, so prefer it over killing the process.
+Tray menu → **Start with Windows** to make it permanent.
 
-## What it does
+## Using it
 
-- **Colored border + title chip** around each managed window, z-ordered directly
-  above that window rather than globally topmost, so anything covering the window
-  covers its border too.
-- **Taskbar identity** — a color swatch icon with the project's initials plus the
-  label prefixed onto the title, so a collapsed window is still identifiable.
-- **Center slot** — click a border or chip to summon; exactly one window is
-  centered at a time and the previous one folds home.
-- **Persistence** — rules survive restarts; a matching window that reappears is
-  re-bordered and moved back to its saved position.
-- **Attention pulse** — a terminal whose text goes quiet after being busy (Claude
-  finished and is waiting on you) strobes its border until you look at it.
-- **Launch project** — opens `claude -c` in its own conhost console at a saved
-  project path. See "Why working directories" below for why this exists.
-- **Hand gestures** (optional, off by default) — point to move focus, open palm to
-  center, fist to fold home, swipe to cycle. Needs the Python sidecar.
+1. **Add a window** — drag the 🎯 target from the main panel onto any window and
+   release. It gets a border, a chip, and a taskbar tag. Colors cycle as you add.
+2. **Summon** — click a window's border or its name chip. It moves to the center
+   slot and comes to the front, even from minimized. Click again to fold it home.
+3. **Rename / recolor** — right-click a name chip.
+4. **Resize the center slot** — summon a window, resize it, and that becomes the
+   remembered center size for everything.
 
-Right-click a title chip for per-window settings: label, color, font size, keep
-on top, taskbar tagging, or remove.
+Closing the main window hides to tray. **Quit from the tray menu is the real
+exit** — it's the only path that saves window positions and hands back the titles
+and icons the app borrowed, so prefer it over killing the process.
 
-## Why working directories, not window titles
+Config lives at `%APPDATA%\BorderDock\config.json` (tray → *Open config file*).
 
-Rules are keyed by the **working directory** of the terminal behind the window,
-not its title. A Claude Code terminal's title is Claude's live task text and
-mutates constantly, so it is useless as an identity.
+## How it identifies a window
 
-`ProcessInfo` finds the shell or node process behind an HWND and reads its current
-directory straight out of the PEB (`NtQueryInformationProcess` →
-`RTL_USER_PROCESS_PARAMETERS.CurrentDirectory`), the way Process Explorer does.
+This is the part that took the most work, and it's worth explaining because it
+determines what the tool can and can't do.
 
-This only works when one window maps to one project. **Windows Terminal hosts every
-tab in a single process**, so a window there cannot be attributed to a project at
-all — `ProcessInfo` detects shared hosts and refuses to guess. That is why the
-tray's *Launch project* opens a standalone `conhost` console instead: one process,
-one window, one project, attachable automatically.
+**Rules are keyed by the working directory of the process behind the window, not
+by the window title.** A terminal running an AI coding agent has a title that is
+the agent's live task text — it changes every few seconds. As an identity, it's
+worthless.
+
+So `ProcessInfo.cs` walks the process tree behind a window handle, finds the
+shell or `node` process, and reads its current directory **straight out of the
+PEB** (`NtQueryInformationProcess` → `RTL_USER_PROCESS_PARAMETERS.CurrentDirectory`)
+— the technique Process Explorer uses. That directory is stable for the life of
+the session, so it makes a durable key.
+
+**The catch: Windows Terminal hosts every tab in a single process.** One process,
+many windows, many projects — a window there simply cannot be attributed to a
+project. The code detects shared hosts and refuses to guess rather than
+mislabelling. That's why the tray's *Launch project* opens a standalone `conhost`
+console: one process, one window, one project, attachable automatically.
 
 Windows with no shell behind them (VLC, browsers) fall back to title matching.
 
-## Layout
+## How the taskbar tagging works
+
+No Windows API lets one process restyle another process's taskbar button —
+`ITaskbarList3::SetOverlayIcon` is own-process only. So the app pokes the target
+window itself: `WM_SETICON` with a generated color swatch, and `WM_SETTEXT` to
+prefix the label onto the title. Both go through `SendMessageTimeout` with
+`SMTO_ABORTIFHUNG`, because a wedged terminal would otherwise hang the app.
+
+Since an AI agent rewrites its console title constantly, the prefix is
+re-applied on every `EVENT_OBJECT_NAMECHANGE`.
+
+## Project layout
 
 | Path | What |
 |---|---|
 | `BorderDock.Spike/BorderManager.cs` | Core: WinEvent hook, center-slot swap, attention pulse, idle detection |
-| `BorderDock.Spike/ProcessInfo.cs` | HWND → project directory, via the process tree and PEB |
+| `BorderDock.Spike/ProcessInfo.cs` | Window handle → project directory, via the process tree and PEB |
 | `BorderDock.Spike/TaskbarTag.cs` | Taskbar button icon + label |
-| `BorderDock.Spike/FourEdgeOverlay.cs` | Border as four edge windows |
+| `BorderDock.Spike/FourEdgeOverlay.cs` | Border as four thin edge windows |
 | `BorderDock.Spike/RegionOverlay.cs` | Border as one region-clipped window |
 | `BorderDock.Spike/UiaText.cs` | Reads terminal text via UI Automation to detect idleness |
-| `BorderDock.Spike/SpikeForm.cs` | Main window, tray, drag-to-pick |
-| `gesture-spike/` | Headless Python/MediaPipe gesture sidecar |
+| `BorderDock.Spike/SpikeForm.cs` | Main panel, tray, drag-to-pick |
+| `gesture-spike/` | Headless Python + MediaPipe gesture sidecar |
 
 Two border implementations sit behind `IBorderOverlay` and swap at runtime — four
-edge windows versus one region-clipped window — because which one tracks a fast
-drag better is an empirical question. Toggle it from the main window.
+edge windows versus one region-clipped window — because which tracks a fast drag
+better is an empirical question. Toggle from the main panel and see for yourself.
 
-Config lives at `%APPDATA%\BorderDock\config.json` (tray → *Open config file*).
+> **On the name:** the repo is `HugeMonitorHelper`; the project inside is still
+> called `BorderDock.Spike` from when it was a throwaway prototype. It stopped
+> being a prototype a while ago. The name will get cleaned up.
 
-## Gesture sidecar
+## Gesture sidecar (optional)
 
-Optional. Vision runs in Python; BorderDock just reads gesture names off stdout.
+Vision runs in Python; the app just reads gesture names from the sidecar's stdout.
 
 ```powershell
 cd gesture-spike
@@ -85,16 +131,28 @@ python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 ```
 
-The venv is not committed (~300MB). BorderDock finds it by walking up from the exe
-and falls back to system `python`.
+Then tray → **Enable hand gestures**. The venv isn't committed (~300 MB); the app
+finds it by walking up from the executable and falls back to system `python`.
 
-## Known rough edges
+## Known limitations
 
-- The taskbar label is a running fight: Claude rewrites the console title every
-  turn and BorderDock re-applies its prefix on `EVENT_OBJECT_NAMECHANGE`. Expect
-  brief flicker on the button.
-- Taskbar labels only show at all if the taskbar is set to never combine. With
-  "always combine" the color swatch is the only remaining signal.
-- If BorderDock crashes rather than quitting, windows keep a prefixed title and a
-  dangling icon handle until they next set their own.
-- Elevated windows can't be read or moved from a non-elevated BorderDock.
+- **Taskbar labels only appear if your taskbar is set to never combine buttons.**
+  With "always combine", the color swatch is the only remaining signal.
+- The taskbar label is a running fight against whatever keeps rewriting the
+  window title. Expect brief flicker on the button.
+- If the app crashes rather than quitting cleanly, windows keep a prefixed title
+  and a stale icon until they next set their own.
+- Elevated windows can't be read or moved by a non-elevated instance.
+- Single monitor per window for the center slot — it centers on the monitor the
+  window is currently on.
+- Windows-only, and deliberately so: it's built on Win32 window hooks throughout.
+
+## Contributing
+
+Issues and PRs welcome. The code is heavily commented, especially the parts where
+Windows behaves unintuitively — those comments explain *why*, and are worth
+reading before changing that code.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
