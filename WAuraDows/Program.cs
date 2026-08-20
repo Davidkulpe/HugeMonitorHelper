@@ -1,4 +1,4 @@
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 internal static class Program
 {
@@ -6,6 +6,6 @@ internal static class Program
     private static void Main()
     {
         ApplicationConfiguration.Initialize();
-        Application.Run(new SpikeForm());
+        Application.Run(new MainForm());
     }
 }

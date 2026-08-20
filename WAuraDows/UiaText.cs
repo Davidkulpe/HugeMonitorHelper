@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Windows.Automation;
 
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// Reads a terminal window's visible text via UI Automation, so we can tell when

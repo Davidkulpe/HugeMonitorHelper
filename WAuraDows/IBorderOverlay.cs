@@ -1,4 +1,4 @@
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// A colored border drawn around one target window. The spike has two

@@ -1,4 +1,4 @@
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// The live highlight shown while you drag the picker over windows: a bright,

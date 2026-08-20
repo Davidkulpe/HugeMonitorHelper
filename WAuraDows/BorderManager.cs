@@ -1,7 +1,7 @@
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
-/// The core of BorderDock: tracks many managed windows with one out-of-context
+/// The core of WAuraDows: tracks many managed windows with one out-of-context
 /// WinEvent hook, draws their borders + title chips (z-ordered above each own
 /// window, not global topmost), runs the single center-slot swap, and persists
 /// everything as title-keyed rules so borders + positions survive a restart.

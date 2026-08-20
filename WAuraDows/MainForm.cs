@@ -1,13 +1,13 @@
 using System.Diagnostics;
 
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
-/// BorderDock main window + tray. Drag the target onto a window to add it (saved
+/// WAuraDows main window + tray. Drag the target onto a window to add it (saved
 /// as a title rule); borders + positions persist and restore on next launch.
 /// Closing hides to tray; Quit (from the tray menu) really exits.
 /// </summary>
-internal sealed class SpikeForm : Form
+internal sealed class MainForm : Form
 {
     private readonly Label _status = new() { Dock = DockStyle.Fill, Padding = new Padding(10), AutoSize = false };
     private readonly Button _target = new()
@@ -39,11 +39,11 @@ internal sealed class SpikeForm : Form
     private bool _quitting;
     private IntPtr _candidate;
 
-    public SpikeForm()
+    public MainForm()
     {
         _manager = new BorderManager(_config);
 
-        Text = "BorderDock";
+        Text = "WAuraDows";
         Icon = LoadAppIcon();
         Width = 470; Height = 360;
         StartPosition = FormStartPosition.CenterScreen;
@@ -173,6 +173,7 @@ internal sealed class SpikeForm : Form
         pause.CheckedChanged += (_, _) => _manager.SetPaused(pause.Checked);
         menu.Items.Add(pause);
 
+        Startup.MigrateLegacyEntry();   // adopt a pre-rename autostart entry before reading it
         var startup = new ToolStripMenuItem("Start with Windows") { CheckOnClick = true, Checked = Startup.IsEnabled() };
         startup.CheckedChanged += (_, _) => Startup.Set(startup.Checked);
         menu.Items.Add(startup);
@@ -195,7 +196,7 @@ internal sealed class SpikeForm : Form
         {
             Icon = LoadAppIcon(),
             Visible = true,
-            Text = "BorderDock",
+            Text = "WAuraDows",
             ContextMenuStrip = menu
         };
         tray.DoubleClick += (_, _) => ShowPanel();

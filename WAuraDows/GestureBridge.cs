@@ -1,12 +1,12 @@
 using System.Diagnostics;
 using System.IO;
 
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// Launches the headless Python gesture sidecar and turns its stdout lines
 /// (GESTURE:OPEN_PALM, ...) into events. Process-stdout IPC — no sockets, no
-/// extra deps. The vision runs in Python; BorderDock just reacts.
+/// extra deps. The vision runs in Python; WAuraDows just reacts.
 /// </summary>
 internal sealed class GestureBridge : IDisposable
 {
@@ -24,7 +24,7 @@ internal sealed class GestureBridge : IDisposable
         if (Running) return true;
         if (!TryLocate(out string py, out string script, out string workdir))
         {
-            Status?.Invoke("ERROR:sidecar not found (gesture-spike venv)");
+            Status?.Invoke("ERROR:sidecar not found (gesture-sidecar venv)");
             return false;
         }
 
@@ -71,14 +71,14 @@ internal sealed class GestureBridge : IDisposable
     }
 
     /// <summary>Find the venv python + sidecar by walking up to the repo's
-    /// gesture-spike folder. Falls back to system python if the venv is missing.</summary>
+    /// gesture-sidecar folder. Falls back to system python if the venv is missing.</summary>
     private static bool TryLocate(out string py, out string script, out string workdir)
     {
         py = script = workdir = "";
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         for (int i = 0; i < 8 && dir is not null; i++, dir = dir.Parent)
         {
-            string gs = Path.Combine(dir.FullName, "gesture-spike");
+            string gs = Path.Combine(dir.FullName, "gesture-sidecar");
             if (Directory.Exists(gs))
             {
                 string s = Path.Combine(gs, "gesture_sidecar.py");

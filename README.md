@@ -1,4 +1,4 @@
-# HugeMonitorHelper
+# WAuraDows
 
 **Tell your windows apart on a very large monitor.**
 
@@ -11,7 +11,7 @@ space — it's identity. Seven terminal windows running seven different projects
 look *identical*, in the taskbar and on screen. You end up reading titles to work
 out which one is which, over and over, all day.
 
-HugeMonitorHelper gives each window you care about a **thick colored border**, a
+WAuraDows gives each window you care about a **thick colored border**, a
 **name tag**, and a **matching taskbar button**, so you recognise it by color
 instead of by reading. Click a border to pull that window to the center of the
 screen at a comfortable size; the one that was there folds back to where you'd
@@ -42,8 +42,8 @@ on top, taskbar tagging, or remove.
 Needs Windows 10/11 and the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 
 ```powershell
-git clone https://github.com/Davidkulpe/HugeMonitorHelper.git
-cd HugeMonitorHelper/BorderDock.Spike
+git clone https://github.com/Davidkulpe/WAuraDows.git
+cd WAuraDows/WAuraDows
 dotnet run -c Debug
 ```
 
@@ -63,7 +63,7 @@ Closing the main window hides to tray. **Quit from the tray menu is the real
 exit** — it's the only path that saves window positions and hands back the titles
 and icons the app borrowed, so prefer it over killing the process.
 
-Config lives at `%APPDATA%\BorderDock\config.json` (tray → *Open config file*).
+Config lives at `%APPDATA%\WAuraDows\config.json` (tray → *Open config file*).
 
 ## How it identifies a window
 
@@ -104,29 +104,29 @@ re-applied on every `EVENT_OBJECT_NAMECHANGE`.
 
 | Path | What |
 |---|---|
-| `BorderDock.Spike/BorderManager.cs` | Core: WinEvent hook, center-slot swap, attention pulse, idle detection |
-| `BorderDock.Spike/ProcessInfo.cs` | Window handle → project directory, via the process tree and PEB |
-| `BorderDock.Spike/TaskbarTag.cs` | Taskbar button icon + label |
-| `BorderDock.Spike/FourEdgeOverlay.cs` | Border as four thin edge windows |
-| `BorderDock.Spike/RegionOverlay.cs` | Border as one region-clipped window |
-| `BorderDock.Spike/UiaText.cs` | Reads terminal text via UI Automation to detect idleness |
-| `BorderDock.Spike/SpikeForm.cs` | Main panel, tray, drag-to-pick |
-| `gesture-spike/` | Headless Python + MediaPipe gesture sidecar |
+| `WAuraDows/BorderManager.cs` | Core: WinEvent hook, center-slot swap, attention pulse, idle detection |
+| `WAuraDows/ProcessInfo.cs` | Window handle → project directory, via the process tree and PEB |
+| `WAuraDows/TaskbarTag.cs` | Taskbar button icon + label |
+| `WAuraDows/FourEdgeOverlay.cs` | Border as four thin edge windows |
+| `WAuraDows/RegionOverlay.cs` | Border as one region-clipped window |
+| `WAuraDows/UiaText.cs` | Reads terminal text via UI Automation to detect idleness |
+| `WAuraDows/MainForm.cs` | Main panel, tray, drag-to-pick |
+| `gesture-sidecar/` | Headless Python + MediaPipe gesture sidecar |
 
 Two border implementations sit behind `IBorderOverlay` and swap at runtime — four
 edge windows versus one region-clipped window — because which tracks a fast drag
 better is an empirical question. Toggle from the main panel and see for yourself.
 
-> **On the name:** the repo is `HugeMonitorHelper`; the project inside is still
-> called `BorderDock.Spike` from when it was a throwaway prototype. It stopped
-> being a prototype a while ago. The name will get cleaned up.
+> **On the name:** *Windows* + *aura* — every window gets its own colored glow.
+> Earlier revisions called it BorderDock; the app migrates a pre-rename config
+> and autostart entry across automatically on first run.
 
 ## Gesture sidecar (optional)
 
 Vision runs in Python; the app just reads gesture names from the sidecar's stdout.
 
 ```powershell
-cd gesture-spike
+cd gesture-sidecar
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 ```

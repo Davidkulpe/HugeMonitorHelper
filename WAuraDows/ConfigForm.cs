@@ -1,4 +1,4 @@
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// Per-window settings window (replaces the right-click popup menu, which couldn't
@@ -17,7 +17,7 @@ internal sealed class ConfigForm : Form
     {
         _rule = rule; _mw = mw; _manager = manager;
 
-        Text = "BorderDock — window settings";
+        Text = "WAuraDows — window settings";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterScreen;
         MinimizeBox = false; MaximizeBox = false; ShowInTaskbar = false;

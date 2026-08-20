@@ -1,4 +1,4 @@
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// Low-level window move helpers shared by the center-slot swap logic.

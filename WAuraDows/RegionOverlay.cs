@@ -1,6 +1,6 @@
 using System.Drawing.Drawing2D;
 
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// Border = ONE window covering the target (outset by w), clipped via a Region

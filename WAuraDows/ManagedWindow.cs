@@ -1,7 +1,7 @@
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
-/// One window under BorderDock's management: its color, its border+chip overlay,
+/// One window under WAuraDows's management: its color, its border+chip overlay,
 /// and its "home" rect (where it sits when not centered).
 /// </summary>
 internal sealed class ManagedWindow

@@ -2,7 +2,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// Puts a managed window's identity onto its TASKBAR button. Collapsed, seven
@@ -14,7 +14,7 @@ namespace BorderDock.Spike;
 ///   text  → WM_SETTEXT prefixing the rule's label onto the live title
 ///
 /// Both poke a window we don't own, so both are best-effort and both are sent
-/// with a timeout (a hung terminal must never freeze BorderDock's UI thread).
+/// with a timeout (a hung terminal must never freeze WAuraDows's UI thread).
 /// The title especially is a running fight: Claude rewrites the console title
 /// on every turn, so BorderManager re-applies the prefix on NAMECHANGE. The
 /// prefix check is what stops that from looping — our own SetWindowText raises

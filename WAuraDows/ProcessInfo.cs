@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// Resolves the WORKING DIRECTORY of the terminal hosted by a window — the stable,

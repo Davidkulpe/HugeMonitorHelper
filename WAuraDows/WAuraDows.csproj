@@ -13,8 +13,8 @@
     <!-- PerMonitorV2 so GetWindowRect/SetWindowPos are physical px and border
          geometry lines up at 150% on a 4K 40" panel. -->
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <!-- Spike: prove the risky Win32 bits before committing to the real app. -->
-    <AssemblyName>BorderDock.Spike</AssemblyName>
+    <AssemblyName>WAuraDows</AssemblyName>
+    <RootNamespace>WAuraDows</RootNamespace>
     <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
 

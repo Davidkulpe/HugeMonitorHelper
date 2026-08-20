@@ -1,4 +1,4 @@
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// The top-left title tag for a managed window: a small colored chip showing the

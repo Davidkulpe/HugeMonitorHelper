@@ -2,12 +2,12 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// Persisted config: the saved window rules + the sticky center size.
-/// Stored at %APPDATA%\BorderDock\config.json. Matching is by window TITLE
-/// (substring) so many same-exe windows each get their own rule.
+/// Stored at %APPDATA%\WAuraDows\config.json. Rules are keyed by the project
+/// directory behind a window, falling back to title for pathless windows.
 /// </summary>
 internal sealed class Config
 {
@@ -17,9 +17,28 @@ internal sealed class Config
 
     [JsonIgnore]
     public static string Dir =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BorderDock");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WAuraDows");
     [JsonIgnore]
     public static string Path_ => System.IO.Path.Combine(Dir, "config.json");
+
+    /// <summary>Where the config lived back when the app was called BorderDock.</summary>
+    [JsonIgnore]
+    private static string LegacyPath =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                     "BorderDock", "config.json");
+
+    /// <summary>Carry a pre-rename config across to the new location, once. Copies
+    /// rather than moves, so the old file survives untouched if anything goes wrong.</summary>
+    private static void MigrateLegacyConfig()
+    {
+        try
+        {
+            if (File.Exists(Path_) || !File.Exists(LegacyPath)) return;
+            Directory.CreateDirectory(Dir);
+            File.Copy(LegacyPath, Path_);
+        }
+        catch { /* best-effort; worst case is starting with no rules */ }
+    }
 
     private static readonly JsonSerializerOptions Opts = new() { WriteIndented = true };
 
@@ -27,6 +46,7 @@ internal sealed class Config
     {
         try
         {
+            MigrateLegacyConfig();
             if (File.Exists(Path_))
             {
                 var cfg = JsonSerializer.Deserialize<Config>(File.ReadAllText(Path_), Opts) ?? new Config();

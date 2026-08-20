@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// All Win32 P/Invoke for the spike, in one place. Real app will split these by
@@ -180,7 +180,7 @@ internal static class Native
 
     // ---- taskbar identity: retitle / re-icon a window we don't own -----------
     // Always via SendMessageTimeout + SMTO_ABORTIFHUNG: a wedged terminal must not
-    // take BorderDock's UI thread down with it, which a plain SendMessage would.
+    // take WAuraDows's UI thread down with it, which a plain SendMessage would.
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam,

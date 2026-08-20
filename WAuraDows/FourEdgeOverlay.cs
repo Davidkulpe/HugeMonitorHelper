@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace BorderDock.Spike;
+namespace WAuraDows;
 
 /// <summary>
 /// Border = four thin top-level windows, one per edge, drawn just OUTSIDE the
