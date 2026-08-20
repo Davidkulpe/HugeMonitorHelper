@@ -1,0 +1,17 @@
+# .NET build output
+bin/
+obj/
+*.user
+
+# Rider / VS
+.vs/
+.idea/
+
+# Python sidecar (venv is ~300MB of installed packages; recreate from requirements.txt)
+.venv/
+__pycache__/
+*.pyc
+
+# OS
+Thumbs.db
+desktop.ini

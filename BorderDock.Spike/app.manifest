@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="BorderDock.Spike"/>
+
+  <!-- DPI awareness (PerMonitorV2) is configured via the WinForms project
+       property <ApplicationHighDpiMode>, not here — WinForms' generated
+       ApplicationConfiguration.Initialize() owns the DPI mode and would override
+       a manifest setting. -->
+
+  <!-- Run as plain user (non-elevated). Admin-owned windows are unmanaged. -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>

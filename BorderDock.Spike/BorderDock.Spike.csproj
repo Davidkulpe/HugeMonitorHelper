@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- UI Automation (System.Windows.Automation) for reading terminal text to
+         detect when Claude goes quiet. UseWPF brings in the UIA managed assemblies. -->
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- PerMonitorV2 so GetWindowRect/SetWindowPos are physical px and border
+         geometry lines up at 150% on a 4K 40" panel. -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <!-- Spike: prove the risky Win32 bits before committing to the real app. -->
+    <AssemblyName>BorderDock.Spike</AssemblyName>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Copy next to the exe so the tray can load the same icon at runtime. -->
+    <None Include="icon.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
