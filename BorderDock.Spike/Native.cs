@@ -113,6 +113,7 @@ internal static class Native
     public const uint EVENT_OBJECT_SHOW           = 0x8002;
     public const uint EVENT_OBJECT_REORDER        = 0x8004;
     public const uint EVENT_SYSTEM_FOREGROUND     = 0x0003;
+    public const uint EVENT_OBJECT_NAMECHANGE     = 0x800C;
     public const uint EVENT_SYSTEM_MINIMIZESTART  = 0x0016;
     public const uint EVENT_SYSTEM_MINIMIZEEND    = 0x0017;
 
@@ -176,6 +177,31 @@ internal static class Native
         GetWindowText(hWnd, sb, sb.Capacity);
         return sb.ToString();
     }
+
+    // ---- taskbar identity: retitle / re-icon a window we don't own -----------
+    // Always via SendMessageTimeout + SMTO_ABORTIFHUNG: a wedged terminal must not
+    // take BorderDock's UI thread down with it, which a plain SendMessage would.
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam,
+        IntPtr lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
+
+    /// <summary>WM_SETTEXT overload: USER32 marshals the string across the process
+    /// boundary for us, so a plain LPWStr is correct here.</summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "SendMessageTimeoutW")]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam,
+        string lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DestroyIcon(IntPtr hIcon);
+
+    public const uint WM_SETTEXT = 0x000C;
+    public const uint WM_SETICON = 0x0080;
+    public const int ICON_SMALL  = 0;
+    public const int ICON_BIG    = 1;
+    public const uint SMTO_NORMAL      = 0x0000;
+    public const uint SMTO_ABORTIFHUNG = 0x0002;
 
     // A minimized window reports a rect near (-32000, -32000). Detect and hide.
     public const int MinimizedSentinel = -30000;

@@ -23,6 +23,10 @@ internal sealed class ManagedWindow
 
     public bool IsCentered;
 
+    /// <summary>Taskbar button identity (color icon + label prefix), null when the
+    /// rule has it switched off. Owns unmanaged HICONs — dispose on detach.</summary>
+    public TaskbarTag? Tag;
+
     // Idle detection (terminal "Claude is waiting") state:
     public int? LastTextSig;       // last UIA text signature
     public long LastChangeMs;      // when the text last changed

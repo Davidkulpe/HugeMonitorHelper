@@ -76,6 +76,10 @@ internal sealed class Config
         public int ColorArgb { get; set; }
         public float FontSize { get; set; } = 9f;
         public bool AlwaysOnTop { get; set; }
+        /// <summary>Stamp the label + color onto this window's TASKBAR button too,
+        /// so it stays identifiable while collapsed. Defaults on; rules saved before
+        /// this existed have no such key, so they keep the initializer's true.</summary>
+        public bool TaskbarTag { get; set; } = true;
         public int Left { get; set; }
         public int Top { get; set; }
         public int Right { get; set; }

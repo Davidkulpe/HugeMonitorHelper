@@ -61,8 +61,10 @@ internal sealed class BorderManager : IDisposable
         _config = config;
         _centerSize = config.CenterSize;
         _proc = WinEventProc;
+        // Range runs to NAMECHANGE (0x800C), one past LOCATIONCHANGE, because the
+        // taskbar label has to be re-applied every time Claude rewrites the title.
         _hookObjects = Native.SetWinEventHook(
-            Native.EVENT_OBJECT_CREATE, Native.EVENT_OBJECT_LOCATIONCHANGE,
+            Native.EVENT_OBJECT_CREATE, Native.EVENT_OBJECT_NAMECHANGE,
             IntPtr.Zero, _proc, 0, 0, Native.WINEVENT_OUTOFCONTEXT);
         _hookSystem = Native.SetWinEventHook(
             Native.EVENT_SYSTEM_FOREGROUND, Native.EVENT_SYSTEM_MINIMIZEEND,
@@ -189,6 +191,8 @@ internal sealed class BorderManager : IDisposable
         _ruleOf[mw] = rule;
         RebuildExclusions();
 
+        ApplyTaskbarTag(mw, rule);
+
         if (restorePosition) WindowMover.MoveTo(hwnd, rule.Home, bringToFront: false);
         if (rule.AlwaysOnTop) ApplyTopmost(hwnd, true);
         if (Native.GetWindowRect(hwnd, out var r)) { overlay.UpdateBounds(r); overlay.RestackAbove(hwnd); }
@@ -250,6 +254,31 @@ internal sealed class BorderManager : IDisposable
         _config.Save();
     }
 
+    // ---- taskbar button identity ---------------------------------------------
+
+    /// <summary>Build (or tear down) this window's taskbar tag to match its rule.
+    /// Called on attach and again whenever the label, color or toggle changes.</summary>
+    private void ApplyTaskbarTag(ManagedWindow mw, Config.Rule rule)
+    {
+        mw.Tag?.Dispose();                 // hands back the old icon + strips the old prefix
+        mw.Tag = null;
+        if (!rule.TaskbarTag || _paused) return;
+
+        var tag = new TaskbarTag(mw.Hwnd, rule.Color, LabelFor(rule, Native.WindowTitle(mw.Hwnd)));
+        tag.ApplyIcon();
+        tag.ApplyTitle();
+        mw.Tag = tag;
+    }
+
+    /// <summary>Per-window toggle from the settings dialog.</summary>
+    public void SetTaskbarTag(ManagedWindow mw, bool on)
+    {
+        if (!_ruleOf.TryGetValue(mw, out var rule)) return;
+        rule.TaskbarTag = on;
+        ApplyTaskbarTag(mw, rule);
+        _config.Save();
+    }
+
     /// <summary>Rebuild one window's overlay after its rule changed (name/color/font).</summary>
     public void RefreshAppearance(ManagedWindow mw)
     {
@@ -261,6 +290,7 @@ internal sealed class BorderManager : IDisposable
         mw.SetColor(rule.Color);
         mw.SetOverlay(fresh);
         RebuildExclusions();
+        ApplyTaskbarTag(mw, rule);   // label/color changed → restamp the taskbar button
         if (!_paused && Native.GetWindowRect(mw.Hwnd, out var r)) { fresh.UpdateBounds(r); fresh.RestackAbove(mw.Hwnd); }
         _config.Save();
     }
@@ -337,6 +367,10 @@ internal sealed class BorderManager : IDisposable
         {
             if (paused) mw.Overlay.Hide();
             else if (Native.GetWindowRect(mw.Hwnd, out var r)) { mw.Overlay.UpdateBounds(r); mw.Overlay.RestackAbove(mw.Hwnd); }
+            // Pause means "give me my windows back untouched" — that has to include
+            // the taskbar buttons, or the titles stay prefixed while borders are off.
+            if (paused) { mw.Tag?.Dispose(); mw.Tag = null; }
+            else if (_ruleOf.TryGetValue(mw, out var rule)) ApplyTaskbarTag(mw, rule);
         }
     }
 
@@ -451,6 +485,10 @@ internal sealed class BorderManager : IDisposable
         if (_active == mw) _active = null;
         _attention.Remove(mw);
         _uia.Forget(mw.Hwnd);
+        // Restores the window's own icon + title. On EVENT_OBJECT_DESTROY the HWND
+        // is already gone and the sends simply fail — but the HICONs still need freeing.
+        mw.Tag?.Dispose();
+        mw.Tag = null;
         mw.Overlay.Dispose();
         _windows.Remove(mw);
         _byHwnd.Remove(mw.Hwnd);
@@ -508,6 +546,14 @@ internal sealed class BorderManager : IDisposable
                 }
                 return;
 
+            case Native.EVENT_OBJECT_NAMECHANGE:
+                // Claude rewrites the console title constantly, wiping our label off
+                // the taskbar button. Put it back. ApplyTitle no-ops when the prefix
+                // is already present, which is what keeps our own WM_SETTEXT (which
+                // raises this same event) from looping.
+                if (!_paused && _byHwnd.TryGetValue(hwnd, out var nm)) nm.Tag?.ApplyTitle();
+                return;
+
             case Native.EVENT_OBJECT_CREATE:
             case Native.EVENT_OBJECT_SHOW:
                 TryHandleNewWindow(hwnd);
@@ -539,6 +585,9 @@ internal sealed class BorderManager : IDisposable
         if (_hookObjects != IntPtr.Zero) Native.UnhookWinEvent(_hookObjects);
         if (_hookSystem != IntPtr.Zero) Native.UnhookWinEvent(_hookSystem);
         _hookObjects = _hookSystem = IntPtr.Zero;
+        // Order matters: give every window its own icon and title back BEFORE we
+        // exit, or the taskbar is left pointing at HICONs that die with this process.
+        foreach (var w in _windows) { w.Tag?.Dispose(); w.Tag = null; }
         foreach (var w in _windows) w.Overlay.Dispose();
         _windows.Clear(); _byHwnd.Clear(); _ruleOf.Clear();
     }

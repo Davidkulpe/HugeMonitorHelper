@@ -21,7 +21,7 @@ internal sealed class ConfigForm : Form
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterScreen;
         MinimizeBox = false; MaximizeBox = false; ShowInTaskbar = false;
-        ClientSize = new Size(420, 290);
+        ClientSize = new Size(420, 316);
         TopMost = true;
 
         int y = 12;
@@ -75,6 +75,12 @@ internal sealed class ConfigForm : Form
         var onTop = new CheckBox { Left = 106, Top = y, Width = 200, Text = "Keep this window on top", Checked = rule.AlwaysOnTop };
         onTop.CheckedChanged += (_, _) => _manager.SetAlwaysOnTop(_mw, onTop.Checked);
         Add(onTop);
+        y += 26;
+
+        var taskbar = new CheckBox { Left = 106, Top = y, Width = 302,
+            Text = "Show label + color on the taskbar button", Checked = rule.TaskbarTag };
+        taskbar.CheckedChanged += (_, _) => _manager.SetTaskbarTag(_mw, taskbar.Checked);
+        Add(taskbar);
         y += 34;
 
         var reset = new Button { Left = 12, Top = y, Width = 130, Height = 28, Text = "Reset label" };
