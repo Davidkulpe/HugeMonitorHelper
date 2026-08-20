@@ -28,7 +28,11 @@ internal sealed class Config
         try
         {
             if (File.Exists(Path_))
-                return JsonSerializer.Deserialize<Config>(File.ReadAllText(Path_), Opts) ?? new Config();
+            {
+                var cfg = JsonSerializer.Deserialize<Config>(File.ReadAllText(Path_), Opts) ?? new Config();
+                cfg.Migrate();
+                return cfg;
+            }
         }
         catch { /* corrupt/missing → start empty (eng-review: don't crash) */ }
         return new Config();
@@ -44,14 +48,44 @@ internal sealed class Config
         catch { /* best-effort; a failed save shouldn't take down the app */ }
     }
 
+    /// <summary>Smallest center slot we'll ever hand out. A degenerate rect captured
+    /// while a window was mid-animation used to be tracked, saved, and reloaded as
+    /// the center size — a 2x2 pixel center slot that shrank every summoned window
+    /// to nothing. Anything below this is treated as "no saved size" and falls back
+    /// to half the monitor.</summary>
+    public const int MinCenterPx = 200;
+
+    public static bool IsSaneCenter(Size s) => s.Width >= MinCenterPx && s.Height >= MinCenterPx;
+
+    /// <summary>The saved center size, or null when absent OR nonsense.</summary>
+    [JsonIgnore]   // computed — without this the serializer writes a junk {IsEmpty,...} blob
     public Size? CenterSize =>
-        CenterWidth > 0 && CenterHeight > 0 ? new Size(CenterWidth, CenterHeight) : null;
+        IsSaneCenter(new Size(CenterWidth, CenterHeight)) ? new Size(CenterWidth, CenterHeight) : null;
+
+    /// <summary>One-time cleanups applied after load.</summary>
+    private void Migrate()
+    {
+        // Drop a poisoned center size rather than carrying it forward.
+        if (!IsSaneCenter(new Size(CenterWidth, CenterHeight))) { CenterWidth = CenterHeight = 0; }
+
+        foreach (var r in Rules)
+        {
+            // A path-keyed rule has no business carrying a TitleMatch. What got saved
+            // there was Claude's live task text at add time ("* Claude Code"), and
+            // substring-matching that against every new window made one project's rule
+            // adopt any terminal that happened to show similar text. The path is the key.
+            if (!string.IsNullOrEmpty(r.PathKey)) r.TitleMatch = "";
+        }
+    }
 
     /// <summary>Resolve a live window to its saved rule. The STABLE key is the
     /// terminal's working directory (PathKey): a Claude terminal's title mutates
-    /// constantly, but its project dir doesn't. We match on PathKey first (exact,
-    /// unambiguous), and only fall back to title for windows with no shell behind
-    /// them (VLC, browsers) or legacy rules saved before path-keying existed.</summary>
+    /// constantly, but its project dir doesn't.
+    ///
+    /// Title matching is ONLY for rules that have no path at all — windows with no
+    /// shell behind them (VLC, browsers) and legacy rules. A path-keyed rule that
+    /// fails to resolve by path must NOT fall through to guessing by title: that is
+    /// how one project's border ends up on another project's terminal.</summary>
     public Rule? Resolve(string? pathKey, string title)
     {
         if (!string.IsNullOrEmpty(pathKey))
@@ -62,16 +96,16 @@ internal sealed class Config
         return BestMatch(title);
     }
 
-    /// <summary>Legacy/title fallback: longest matching TitleMatch wins.</summary>
+    /// <summary>Title fallback: pathless rules only, longest match wins.</summary>
     public Rule? BestMatch(string title) =>
-        Rules.Where(r => r.Matches(title))
+        Rules.Where(r => string.IsNullOrEmpty(r.PathKey) && r.Matches(title))
              .OrderByDescending(r => r.TitleMatch.Length)
              .FirstOrDefault();
 
     public sealed class Rule
     {
         public string? PathKey { get; set; }            // the terminal's working dir = the STABLE key
-        public string TitleMatch { get; set; } = "";   // fallback key + display: the window title at add time
+        public string TitleMatch { get; set; } = "";   // fallback key for PATHLESS rules only (VLC, browsers)
         public string? DisplayName { get; set; }       // custom chip label; null = folder name, else title
         public int ColorArgb { get; set; }
         public float FontSize { get; set; } = 9f;
@@ -92,9 +126,13 @@ internal sealed class Config
 
         public void SetHome(in Native.RECT r) { Left = r.Left; Top = r.Top; Right = r.Right; Bottom = r.Bottom; }
 
+        /// <summary>Shortest TitleMatch we'll act on. A two-character fragment is a
+        /// substring of half the windows on the desktop.</summary>
+        public const int MinTitleMatch = 4;
+
         /// <summary>Case-insensitive substring match against a live window title.</summary>
         public bool Matches(string title) =>
-            !string.IsNullOrEmpty(TitleMatch) &&
+            TitleMatch.Length >= MinTitleMatch &&
             title.Contains(TitleMatch, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>Exact (normalized) match against a terminal's working directory.</summary>

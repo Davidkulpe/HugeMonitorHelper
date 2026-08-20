@@ -165,7 +165,28 @@ internal static class ProcessInfo
 
     // ---- toolhelp process snapshot -------------------------------------------
 
+    // Snapshotting every process on the box costs real time, and the caller runs on
+    // the SHOW/CREATE firehose — every menu, tooltip and dialog anywhere on the
+    // desktop used to trigger a full enumeration. The process tree does not change
+    // meaningfully inside a second, and a window that just appeared already has its
+    // process running, so a short TTL is safe and removes nearly all of the cost.
+    //
+    // UI-thread only: WINEVENT_OUTOFCONTEXT callbacks are delivered to the thread
+    // that installed the hook, so this needs no locking.
+    private const long SnapshotTtlMs = 1000;
+    private static Dictionary<uint, (uint parent, string exe)>? _snapCache;
+    private static long _snapTakenMs;
+
     private static Dictionary<uint, (uint parent, string exe)> SnapshotProcesses()
+    {
+        long now = Environment.TickCount64;
+        if (_snapCache is not null && now - _snapTakenMs < SnapshotTtlMs) return _snapCache;
+        _snapCache = TakeSnapshot();
+        _snapTakenMs = now;
+        return _snapCache;
+    }
+
+    private static Dictionary<uint, (uint parent, string exe)> TakeSnapshot()
     {
         var map = new Dictionary<uint, (uint, string)>();
         IntPtr snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);

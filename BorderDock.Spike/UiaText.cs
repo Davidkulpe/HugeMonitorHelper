@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Windows.Automation;
 
 namespace BorderDock.Spike;
@@ -10,7 +11,9 @@ namespace BorderDock.Spike;
 /// </summary>
 internal sealed class UiaText
 {
-    private readonly Dictionary<IntPtr, AutomationElement?> _textEl = new();
+    // Concurrent because the scan runs on a background thread while Forget() is
+    // called from the UI thread as windows detach.
+    private readonly ConcurrentDictionary<IntPtr, AutomationElement?> _textEl = new();
 
     /// <summary>A cheap signature of the window's current text (length + hash of a
     /// capped slice). Returns null if UIA can't read it. Changing signature = activity.</summary>
@@ -37,7 +40,7 @@ internal sealed class UiaText
                 return HashCode.Combine(text.Length, text.GetHashCode());
             }
         }
-        catch { _textEl.Remove(hwnd); } // stale element (window changed) → re-resolve next time
+        catch { _textEl.TryRemove(hwnd, out _); } // stale element (window changed) → re-resolve next time
         return null;
     }
 
@@ -47,7 +50,7 @@ internal sealed class UiaText
         {
             // Validate the cached element still answers; if not, re-resolve.
             try { _ = cached.Current.IsOffscreen; return cached; }
-            catch { _textEl.Remove(hwnd); }
+            catch { _textEl.TryRemove(hwnd, out _); }
         }
 
         AutomationElement? root;
@@ -84,5 +87,5 @@ internal sealed class UiaText
         return best;
     }
 
-    public void Forget(IntPtr hwnd) => _textEl.Remove(hwnd);
+    public void Forget(IntPtr hwnd) => _textEl.TryRemove(hwnd, out _);
 }

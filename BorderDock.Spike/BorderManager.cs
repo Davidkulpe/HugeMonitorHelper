@@ -41,8 +41,16 @@ internal sealed class BorderManager : IDisposable
     private readonly System.Windows.Forms.Timer _pulse = new() { Interval = 50 };
 
     // Idle detection: read terminal text via UIA, pulse when it stops changing.
+    // The UIA read is the expensive half — a subtree FindAll plus a full viewport
+    // read per terminal — so it runs on a BACKGROUND thread and posts results back.
+    // On the UI thread it used to freeze the app for hundreds of ms every 5s once a
+    // few terminals were managed. (UIA also prefers not to be called from the STA
+    // thread that pumps the UI, so this is the supported shape as well.)
     private readonly UiaText _uia = new();
-    private readonly System.Windows.Forms.Timer _idle = new() { Interval = 5000 };
+    private readonly CancellationTokenSource _idleCts = new();
+    private readonly SynchronizationContext _ui;
+    private volatile IntPtr[] _idleTargets = Array.Empty<IntPtr>();
+    private const int IdlePeriodMs = 5000;
     private const long QuietMs = 30000;    // on-screen text static this long after activity → "waiting"
                                            // (Claude shows a ticking timer while busy, so 30s still = truly idle)
     public int IdlePulses;
@@ -70,22 +78,55 @@ internal sealed class BorderManager : IDisposable
             Native.EVENT_SYSTEM_FOREGROUND, Native.EVENT_SYSTEM_MINIMIZEEND,
             IntPtr.Zero, _proc, 0, 0, Native.WINEVENT_OUTOFCONTEXT);
         _pulse.Tick += (_, _) => PulseTick();
-        _pulse.Start();
-        _idle.Tick += (_, _) => IdleTick();
-        _idle.Start();
+        // NOT started here — the pulse only runs while something is actually
+        // demanding attention. See AddAttention / ClearAttention.
+        // Captured on the UI thread so the scanner can post results back. The
+        // fallback matters: whether a WinForms context is installed yet depends on
+        // whether a Control has been constructed, and a null here would silently
+        // drop every scan result forever. Constructing one binds to this thread,
+        // which is the UI thread by definition at this point.
+        _ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
+        _ = Task.Run(() => IdleLoop(_idleCts.Token));
     }
 
-    /// <summary>Poll each managed terminal's text. A window that was changing (Claude
-    /// working / spinner) and then goes static for QuietMs while unfocused = "waiting"
-    /// → pulse. Resumed activity or focusing it clears the pulse.</summary>
-    private void IdleTick()
+    /// <summary>Background half: just the UIA reads, never touching manager state.
+    /// Targets come from a snapshot array the UI thread swaps in wholesale, so this
+    /// never walks the live _windows list.</summary>
+    private async Task IdleLoop(CancellationToken ct)
     {
-        if (_windows.Count == 0) return;
-        long now = Environment.TickCount64;
-        foreach (var mw in _windows)
+        while (!ct.IsCancellationRequested)
         {
-            var sig = _uia.Snapshot(mw.Hwnd);
-            if (sig is null) continue;                 // not readable via UIA → skip
+            try
+            {
+                var targets = _idleTargets;            // volatile read of an immutable array
+                if (targets.Length > 0)
+                {
+                    var scan = new List<(IntPtr hwnd, int sig)>(targets.Length);
+                    foreach (var hwnd in targets)
+                    {
+                        if (ct.IsCancellationRequested) return;
+                        if (_uia.Snapshot(hwnd) is { } sig) scan.Add((hwnd, sig));
+                    }
+                    if (scan.Count > 0) _ui.Post(_ => ApplyIdleScan(scan), null);
+                }
+            }
+            catch { /* a flaky UIA read must not kill the loop */ }
+
+            try { await Task.Delay(IdlePeriodMs, ct); }
+            catch (OperationCanceledException) { return; }
+        }
+    }
+
+    /// <summary>UI half: all the timing state and the pulse decision. A window that
+    /// was changing (Claude working / spinner) and then goes static for QuietMs while
+    /// unfocused = "waiting" → pulse. Resumed activity or focusing it clears it.</summary>
+    private void ApplyIdleScan(List<(IntPtr hwnd, int sig)> scan)
+    {
+        long now = Environment.TickCount64;
+        foreach (var (hwnd, sig) in scan)
+        {
+            // Might have been detached while the scan was in flight.
+            if (!_byHwnd.TryGetValue(hwnd, out var mw)) continue;
 
             if (mw.LastTextSig is null) { mw.LastTextSig = sig; mw.LastChangeMs = now; continue; }
 
@@ -101,7 +142,7 @@ internal sealed class BorderManager : IDisposable
                 mw.WasActive = false;                  // pulse once per work→wait transition
                 if (Native.GetForegroundWindow() != mw.Hwnd)
                 {
-                    _attention.Add(mw);
+                    AddAttention(mw);
                     IdlePulses++;
                     string t = Native.WindowTitle(mw.Hwnd);
                     LastIdle = t.Length > 40 ? t[..40] : t;
@@ -109,6 +150,9 @@ internal sealed class BorderManager : IDisposable
             }
         }
     }
+
+    /// <summary>Hand the background scanner a fresh immutable target list.</summary>
+    private void RebuildIdleTargets() => _idleTargets = _windows.Select(w => w.Hwnd).ToArray();
 
     // ---- attention pulse (Claude bell while unfocused → calm breathing) -------
 
@@ -126,17 +170,27 @@ internal sealed class BorderManager : IDisposable
         LastFlash = $"{(managed ? "managed" : "unmanaged")}: {(title.Length > 40 ? title[..40] : title)}";
         if (!managed) return;
         if (Native.GetForegroundWindow() == hwnd) return; // already looking at it
-        _attention.Add(mw!);
+        AddAttention(mw!);
+    }
+
+    /// <summary>Start pulsing this window. The 50ms timer only runs while at least
+    /// one window wants attention — it used to tick forever, waking the app twenty
+    /// times a second to discover there was nothing to do.</summary>
+    private void AddAttention(ManagedWindow mw)
+    {
+        if (_attention.Add(mw) && _attention.Count == 1) _pulse.Start();
     }
 
     private void ClearAttention(ManagedWindow mw)
     {
-        if (_attention.Remove(mw)) mw.Overlay.SetAttention(null, null); // back to base color + width
+        if (!_attention.Remove(mw)) return;
+        mw.Overlay.SetAttention(null, null);      // back to base color + width
+        if (_attention.Count == 0) _pulse.Stop();
     }
 
     private void PulseTick()
     {
-        if (_attention.Count == 0) return;
+        if (_attention.Count == 0) { _pulse.Stop(); return; }
         // VIOLENT strobe: fat 5x border, full-range slam between the base color and
         // white on a fast (~450ms) cycle so a waiting terminal is impossible to miss.
         double phase = (Environment.TickCount64 % 450) / 450.0;
@@ -163,10 +217,16 @@ internal sealed class BorderManager : IDisposable
         var rule = ResolveRule(hwnd, title, out var pathKey);
         if (rule is null)
         {
-            // New rule keyed to the terminal's WORKING DIR (stable); title is kept as
-            // a fallback + display source. DisplayName stays null → chip shows the
-            // folder name until you rename it.
-            rule = new Config.Rule { PathKey = pathKey, TitleMatch = title, ColorArgb = Palette[_colorIndex++ % Palette.Length].ToArgb() };
+            // New rule keyed to the terminal's WORKING DIR (stable). TitleMatch is set
+            // ONLY when there's no path to key on — for a terminal it would be Claude's
+            // live task text, which mutates and matches other people's windows.
+            // DisplayName stays null → chip shows the folder name until you rename it.
+            rule = new Config.Rule
+            {
+                PathKey = pathKey,
+                TitleMatch = pathKey is null ? title : "",
+                ColorArgb = Palette[_colorIndex++ % Palette.Length].ToArgb(),
+            };
             _config.Rules.Add(rule);
         }
         if (Native.GetWindowRect(hwnd, out var cur)) rule.SetHome(cur);
@@ -190,6 +250,7 @@ internal sealed class BorderManager : IDisposable
         _byHwnd[hwnd] = mw;
         _ruleOf[mw] = rule;
         RebuildExclusions();
+        RebuildIdleTargets();
 
         ApplyTaskbarTag(mw, rule);
 
@@ -352,7 +413,8 @@ internal sealed class BorderManager : IDisposable
             prev.IsCentered = false;
         }
         if (WindowMover.TryGetRect(mw.Hwnd, out var cur)) mw.Home = cur;
-        _centerSize ??= WindowMover.DefaultCenterSize(mw.Hwnd);
+        if (_centerSize is not { } cs || !Config.IsSaneCenter(cs))
+            _centerSize = WindowMover.DefaultCenterSize(mw.Hwnd);
         WindowMover.MoveTo(mw.Hwnd, WindowMover.CenteredRect(mw.Hwnd, _centerSize.Value), bringToFront: true);
         mw.IsCentered = true; _centered = mw;
         mw.Overlay.Flash();
@@ -412,7 +474,9 @@ internal sealed class BorderManager : IDisposable
             var home = mw.IsCentered ? mw.Home : (Native.GetWindowRect(mw.Hwnd, out var r) && !Native.LooksMinimized(r) ? r : mw.Home);
             rule.SetHome(home);
         }
-        if (_centerSize is { } s) { _config.CenterWidth = s.Width; _config.CenterHeight = s.Height; }
+        // Never persist a nonsense center size — that's what poisons the next launch.
+        if (_centerSize is { } s && Config.IsSaneCenter(s))
+        { _config.CenterWidth = s.Width; _config.CenterHeight = s.Height; }
         _config.Save();
     }
 
@@ -483,7 +547,7 @@ internal sealed class BorderManager : IDisposable
     {
         if (_centered == mw) _centered = null;
         if (_active == mw) _active = null;
-        _attention.Remove(mw);
+        ClearAttention(mw);          // also stops the pulse timer if it was the last one
         _uia.Forget(mw.Hwnd);
         // Restores the window's own icon + title. On EVENT_OBJECT_DESTROY the HWND
         // is already gone and the sends simply fail — but the HICONs still need freeing.
@@ -494,6 +558,7 @@ internal sealed class BorderManager : IDisposable
         _byHwnd.Remove(mw.Hwnd);
         _ruleOf.Remove(mw);
         RebuildExclusions();
+        RebuildIdleTargets();
     }
 
     private void RebuildExclusions()
@@ -538,7 +603,15 @@ internal sealed class BorderManager : IDisposable
                         mw.Overlay.RestackAbove(mw.Hwnd);
                         if (!Native.LooksMinimized(r))
                         {
-                            if (mw.IsCentered && _centered == mw) _centerSize = new Size(r.Width, r.Height);
+                            // Only LEARN a center size from a plausible rect. Windows
+                            // report degenerate rects mid-animation and while closing,
+                            // and one of those getting saved is what produced a 2x2
+                            // center slot that shrank every summoned window to nothing.
+                            if (mw.IsCentered && _centered == mw)
+                            {
+                                var seen = new Size(r.Width, r.Height);
+                                if (Config.IsSaneCenter(seen)) _centerSize = seen;
+                            }
                             else if (!mw.IsCentered && _ruleOf.TryGetValue(mw, out var ru)) ru.SetHome(r);
                         }
                     }
@@ -581,7 +654,9 @@ internal sealed class BorderManager : IDisposable
     public void Dispose()
     {
         _pulse.Stop(); _pulse.Dispose();
-        _idle.Stop(); _idle.Dispose();
+        // Stop the scanner before tearing down what it reads.
+        _idleTargets = Array.Empty<IntPtr>();
+        _idleCts.Cancel(); _idleCts.Dispose();
         if (_hookObjects != IntPtr.Zero) Native.UnhookWinEvent(_hookObjects);
         if (_hookSystem != IntPtr.Zero) Native.UnhookWinEvent(_hookSystem);
         _hookObjects = _hookSystem = IntPtr.Zero;

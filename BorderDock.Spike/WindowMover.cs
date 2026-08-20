@@ -26,8 +26,10 @@ internal static class WindowMover
     public static Native.RECT CenteredRect(IntPtr hwnd, Size size)
     {
         var wa = Screen.FromHandle(hwnd).WorkingArea;
-        int w = Math.Min(size.Width, wa.Width);
-        int h = Math.Min(size.Height, wa.Height);
+        // Clamp on BOTH ends. The upper clamp keeps the slot on screen; the lower one
+        // means even a corrupt saved size can't shrink a window to a few pixels.
+        int w = Math.Clamp(size.Width,  Math.Min(Config.MinCenterPx, wa.Width),  wa.Width);
+        int h = Math.Clamp(size.Height, Math.Min(Config.MinCenterPx, wa.Height), wa.Height);
         int x = wa.Left + (wa.Width - w) / 2;
         int y = wa.Top + (wa.Height - h) / 2;
         return new Native.RECT { Left = x, Top = y, Right = x + w, Bottom = y + h };

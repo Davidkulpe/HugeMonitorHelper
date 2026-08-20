@@ -1,0 +1,16 @@
+# Normalize to LF in the repository, check out native on each platform.
+# Without this every commit from Windows warns "LF will be replaced by CRLF".
+* text=auto
+
+*.cs        text diff=csharp
+*.csproj    text
+*.manifest  text
+*.md        text
+*.py        text
+*.json      text
+*.txt       text
+
+# Binary — never touch line endings, never try to diff.
+*.ico   binary
+*.png   binary
+*.task  binary
